@@ -119,7 +119,7 @@ const toggleSaveStartup = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     const startupId = req.params.id;
-    const isSaved = user.savedStartups.includes(startupId);
+    const isSaved = user.savedStartups.some((id) => id.toString() === startupId);
 
     await User.findByIdAndUpdate(
       req.user.id,

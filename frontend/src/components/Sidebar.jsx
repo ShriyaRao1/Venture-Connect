@@ -12,7 +12,7 @@ const FOUNDER_LINKS = [
 const INVESTOR_LINKS = [
   { to: '/dashboard',                    label: 'Overview',     icon: '▦' },
   { to: '/dashboard?tab=browse',         label: 'Browse Startups', icon: '🔍' },
-  { to: '/dashboard?tab=connections',    label: 'My Interests', icon: '💡' },
+  { to: '/dashboard?tab=connections',    label: 'Connections',  icon: '🤝' },
   { to: '/investors',                    label: 'Network',      icon: '👥' },
   { to: '/messages',                     label: 'Messages',     icon: '✉' },
 ];

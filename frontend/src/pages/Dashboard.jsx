@@ -48,7 +48,7 @@ export default function Dashboard() {
     if (user?.role === 'admin') return; // admin is redirected
     const startupReq = user.role === 'founder'
       ? startupAPI.getMy()
-      : Promise.resolve({ data: { startups: [] } });
+      : userAPI.saved();
     const connReq = user.role === 'founder'
       ? connectionAPI.received()
       : connectionAPI.sent();
@@ -157,7 +157,7 @@ export default function Dashboard() {
             {/* Stat tiles */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: user.role === 'founder' ? 'My Startups' : 'Interests', value: loading ? '—' : myStartups.length, icon: '🚀' },
+                { label: user.role === 'founder' ? 'My Startups' : 'Saved Startups', value: loading ? '—' : myStartups.length, icon: '🚀' },
                 { label: 'Connections', value: loading ? '—' : connections.length, icon: '🤝' },
                 { label: 'Pending',     value: loading ? '—' : pending,            icon: '⏳' },
                 { label: 'Accepted',    value: loading ? '—' : accepted,           icon: '✅' },
@@ -257,41 +257,156 @@ export default function Dashboard() {
 
         {/* ── Connections ───────────────────── */}
         {tab === 'connections' && (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {loading ? <Spinner /> : connections.length === 0 ? (
               <div className="text-center py-16 border border-[#2a2a2a] rounded-xl">
                 <p className="text-[#555] text-sm">No connections yet.</p>
               </div>
-            ) : connections.map((c) => {
-              const partner = user.role === 'founder' ? c.investor : c.startup;
-              return (
-                <motion.div key={c._id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                  className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-5 py-4 flex items-center gap-4 flex-wrap">
-                  <div className="w-9 h-9 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
-                    {(partner?.name?.[0] || '?').toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white">{partner?.name || 'Unknown'}</p>
-                    <p className="text-xs text-[#555] mt-0.5 truncate">{c.message || 'No message'}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>{c.status}</span>
-                    {user.role === 'founder' && c.status === 'pending' && (
-                      <>
-                        <button onClick={() => handleRespond(c._id, 'accepted')}
-                          className="text-xs px-3 py-1.5 rounded-md bg-[#00c853]/10 text-[#00c853] hover:bg-[#00c853]/20 font-semibold transition-colors">
-                          Accept
-                        </button>
-                        <button onClick={() => handleRespond(c._id, 'rejected')}
-                          className="text-xs px-3 py-1.5 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 font-semibold transition-colors">
-                          Decline
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {connections.map((c) => {
+                  if (user.role === 'founder') {
+                    const inv = c.investor;
+                    return (
+                      <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                        
+                        {/* Header: Investor Info */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3">
+                            <div className="w-10 h-10 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
+                              {(inv?.name?.[0] || '?').toUpperCase()}
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-white">{inv?.name || 'Unknown Investor'}</h3>
+                              {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            {c.status}
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-2 text-xs">
+                          {inv?.bio && <p className="text-[#888] line-clamp-2 leading-relaxed">{inv.bio}</p>}
+                          {c.startup && (
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <span className="text-[10px] text-[#555]">Interested in:</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#00c853] font-semibold">
+                                {c.startup.name}
+                              </span>
+                            </div>
+                          )}
+                          {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
+                            <p className="text-white font-semibold mt-1">
+                              Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
+                            </p>
+                          )}
+                          {c.message && (
+                            <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                              "{c.message}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                          {inv?.linkedin && (
+                            <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline pt-2 mr-auto">
+                              LinkedIn ↗
+                            </a>
+                          )}
+                          {c.status === 'pending' && (
+                            <>
+                              <button onClick={() => handleRespond(c._id, 'accepted')}
+                                className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
+                                Accept
+                              </button>
+                              <button onClick={() => handleRespond(c._id, 'rejected')}
+                                className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
+                                Decline
+                              </button>
+                            </>
+                          )}
+                          {c.status === 'accepted' && (
+                            <button
+                              onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
+                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                              ✉ Message
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  } else {
+                    // Investor view: Sent connections (startup details card)
+                    const startup = c.startup;
+                    const founder = startup?.founder;
+                    return (
+                      <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                        
+                        {/* Header: Startup Info */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center font-black text-white text-sm shrink-0 overflow-hidden">
+                              {startup?.logo ? <img src={startup.logo} alt="" className="w-full h-full object-cover" /> : (startup?.name?.[0] || '?').toUpperCase()}
+                            </div>
+                            <div>
+                              <Link to={`/startups/${startup?._id}`} className="text-sm font-bold text-white hover:text-[#00c853] transition-colors">
+                                {startup?.name || 'Unknown Startup'}
+                              </Link>
+                              <div className="flex gap-1.5 mt-1">
+                                {startup?.category && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.category}</span>}
+                                {startup?.stage && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.stage}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            {c.status}
+                          </span>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-2 text-xs">
+                          {startup?.tagline && <p className="text-[#888] line-clamp-2 leading-relaxed">{startup.tagline}</p>}
+                          {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
+                            <p className="text-white font-semibold mt-1">
+                              Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
+                            </p>
+                          )}
+                          {c.message && (
+                            <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                              "{c.message}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                          {founder && (
+                            <span className="text-[10px] text-[#555] pt-2 mr-auto truncate max-w-[150px]">
+                              Founder: {founder.name}
+                            </span>
+                          )}
+                          <Link to={`/startups/${startup?._id}`} className="text-xs px-3 py-1.5 rounded-md border border-[#2a2a2a] text-[#888] hover:text-white transition-colors">
+                            Details
+                          </Link>
+                          {c.status === 'accepted' && founder && (
+                            <button
+                              onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
+                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                              ✉ Message Founder
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  }
+                })}
+              </div>
+            )}
           </div>
         )}
 

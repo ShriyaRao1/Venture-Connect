@@ -58,7 +58,11 @@ const getReceivedConnections = async (req, res) => {
 const getSentConnections = async (req, res) => {
   try {
     const connections = await Connection.find({ investor: req.user.id })
-      .populate('startup', 'name tagline logo stage category')
+      .populate({
+        path: 'startup',
+        select: 'name tagline logo stage category founder',
+        populate: { path: 'founder', select: 'name email' }
+      })
       .sort({ createdAt: -1 });
     res.json({ success: true, connections });
   } catch (err) {

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { startupAPI, connectionAPI } from '../api/api';
+import { startupAPI, connectionAPI, userAPI } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
 const fmt = (n) => {
@@ -39,7 +39,16 @@ export default function StartupDetail() {
       .then(({ data }) => setStartup(data.startup))
       .catch(() => { toast.error('Startup not found'); navigate('/startups'); })
       .finally(() => setLoading(false));
-  }, [id]);
+
+    if (user) {
+      userAPI.saved()
+        .then(({ data }) => {
+          const isSaved = data.startups?.some((s) => s._id === id);
+          setSaved(!!isSaved);
+        })
+        .catch(() => {});
+    }
+  }, [id, user, navigate]);
 
   const handleSave = async () => {
     if (!user) { navigate('/login'); return; }
