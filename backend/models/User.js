@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema(
     linkedin: { type: String, default: '' },
     isVerified: { type: Boolean, default: false },
     savedStartups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Startup' }],
+    investorPreferences: {
+      sectors: [{ type: String }],
+      stages: [{ type: String }],
+      locations: [{ type: String }],
+    },
     resetPasswordToken:  { type: String, default: undefined },
     resetPasswordExpire: { type: Date,   default: undefined },
   },

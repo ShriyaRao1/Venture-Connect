@@ -41,6 +41,8 @@ export const startupAPI = {
   update: (id, data) => api.put(`/startups/${id}`, data),
   delete: (id)     => api.delete(`/startups/${id}`),
   save:   (id)     => api.post(`/startups/${id}/save`),
+  createRound: (id, data) => api.post(`/startups/${id}/rounds`, data),
+  invest: (id, amount) => api.post(`/startups/${id}/invest`, { amount }),
 };
 
 // ── Connections ───────────────────────────────────────────────────────────────

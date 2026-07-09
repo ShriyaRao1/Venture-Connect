@@ -33,6 +33,19 @@ const startupSchema = new mongoose.Schema(
     // Stats
     views: { type: Number, default: 0 },
     interests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // investors who showed interest
+    fundingRounds: [{
+      roundName: { type: String, required: true },
+      targetAmount: { type: Number, required: true },
+      raisedAmount: { type: Number, default: 0 },
+      equityOffered: { type: Number, required: true },
+      status: { type: String, enum: ['Open', 'Closed'], default: 'Open' },
+      closedAt: { type: Date },
+      investments: [{
+        investor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        amount: { type: Number, required: true },
+        date: { type: Date, default: Date.now }
+      }]
+    }]
   },
   { timestamps: true }
 );

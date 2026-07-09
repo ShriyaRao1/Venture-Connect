@@ -14,6 +14,11 @@ export default function Profile() {
     website:  user?.website  || '',
     linkedin: user?.linkedin || '',
     avatar:   user?.avatar   || '',
+    investorPreferences: {
+      sectors:   user?.investorPreferences?.sectors   || [],
+      stages:    user?.investorPreferences?.stages    || [],
+      locations: user?.investorPreferences?.locations || [],
+    }
   });
 
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
@@ -22,6 +27,33 @@ export default function Profile() {
 
   const onChange    = (e) => setForm({ ...form, [e.target.name]: e.target.value });
   const onPwChange  = (e) => setPwForm({ ...pwForm, [e.target.name]: e.target.value });
+
+  const handleTogglePreference = (type, value) => {
+    setForm((prev) => {
+      const current = prev.investorPreferences[type];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return {
+        ...prev,
+        investorPreferences: {
+          ...prev.investorPreferences,
+          [type]: next,
+        },
+      };
+    });
+  };
+
+  const handleLocationsChange = (e) => {
+    const val = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      investorPreferences: {
+        ...prev.investorPreferences,
+        locations: val.split(',').map((l) => l.trim()).filter(Boolean),
+      },
+    }));
+  };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -130,7 +162,65 @@ export default function Profile() {
             </div>
           </div>
 
-          <button type="submit" disabled={saving} className="btn-al w-full py-2.5">
+          {user?.role === 'investor' && (
+            <div className="border border-[#2a2a2a] rounded-xl p-5 space-y-4 bg-[#0c0c0c] mt-5">
+              <h2 className="text-[11px] font-bold text-[#555] uppercase tracking-widest">Matchmaking Preferences</h2>
+              <p className="text-[11px] text-[#555] -mt-2">Tailor your matchmaking score by indicating your focus sectors, stages, and locations.</p>
+              
+              {/* Preferred Sectors */}
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-2">Focus Sectors</label>
+                <div className="flex flex-wrap gap-2">
+                  {['FinTech', 'HealthTech', 'EdTech', 'SaaS', 'E-Commerce', 'AI/ML', 'GreenTech', 'Logistics', 'Social', 'Other'].map((sec) => {
+                    const active = form.investorPreferences?.sectors?.includes(sec);
+                    return (
+                      <button key={sec} type="button" onClick={() => handleTogglePreference('sectors', sec)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                          active
+                            ? 'bg-[#00c853]/10 border-[#00c853]/40 text-[#00c853]'
+                            : 'border-[#2a2a2a] text-[#555] hover:text-white hover:border-[#444]'
+                        }`}>
+                        {sec}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Preferred Stages */}
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-2">Target Stages</label>
+                <div className="flex flex-wrap gap-2">
+                  {['Idea', 'MVP', 'Early Traction', 'Growth', 'Scaling'].map((stg) => {
+                    const active = form.investorPreferences?.stages?.includes(stg);
+                    return (
+                      <button key={stg} type="button" onClick={() => handleTogglePreference('stages', stg)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                          active
+                            ? 'bg-[#00c853]/10 border-[#00c853]/40 text-[#00c853]'
+                            : 'border-[#2a2a2a] text-[#555] hover:text-white hover:border-[#444]'
+                        }`}>
+                        {stg}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Target Locations */}
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-1.5">Target Locations (comma-separated)</label>
+                <input
+                  value={form.investorPreferences?.locations?.join(', ') || ''}
+                  onChange={handleLocationsChange}
+                  className="al-input"
+                  placeholder="e.g. Mumbai, Bangalore, San Francisco"
+                />
+              </div>
+            </div>
+          )}
+
+          <button type="submit" disabled={saving} className="btn-al w-full py-2.5 mt-5">
             {saving ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full spin" />

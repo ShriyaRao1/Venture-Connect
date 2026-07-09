@@ -32,7 +32,7 @@ const getUserProfile = async (req, res) => {
 // @access Private
 const updateProfile = async (req, res) => {
   try {
-    const allowed = ['name', 'bio', 'location', 'website', 'linkedin', 'avatar'];
+    const allowed = ['name', 'bio', 'location', 'website', 'linkedin', 'avatar', 'investorPreferences'];
     const updates = {};
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

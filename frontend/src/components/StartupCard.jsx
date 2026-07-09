@@ -37,6 +37,11 @@ export default function StartupCard({ startup, delay = 0 }) {
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STAGE_CLASS[startup.stage] || 'stage-mvp'}`}>
               {startup.stage}
             </span>
+            {startup.matchScore !== undefined && startup.matchScore !== null && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00c853]/15 text-[#00c853] font-bold tracking-wide">
+                ✨ {startup.matchScore}% Match
+              </span>
+            )}
           </div>
         </div>
       </div>
