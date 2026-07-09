@@ -147,6 +147,13 @@ export default function AdminPanel() {
               <StatCard icon="💬" label="Messages Sent"  value={fmt(stats?.totalMessages)}    color="#ec4899" />
             </div>
 
+            {/* Funding Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard icon="💰" label="Total Target Goal" value={`₹${(stats?.totalFundingGoal || 0).toLocaleString('en-IN')}`} sub="Sum of all startup targets" color="#00c853" />
+              <StatCard icon="📈" label="Total Funding Raised" value={`₹${(stats?.totalFundingRaised || 0).toLocaleString('en-IN')}`} sub="Sum of all investments logged" color="#3b82f6" />
+              <StatCard icon="📁" label="Funding Rounds" value={fmt(stats?.totalFundingRounds)} sub="Total investment rounds opened" color="#f59e0b" />
+            </div>
+
             {/* Two columns */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 

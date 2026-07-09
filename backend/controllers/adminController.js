@@ -21,6 +21,8 @@ const getStats = async (req, res) => {
       startupsByCategory,
       startupsByStage,
       totalFundingGoal,
+      totalFundingRaised,
+      totalFundingRounds,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'founder' }),
@@ -34,6 +36,8 @@ const getStats = async (req, res) => {
       Startup.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       Startup.aggregate([{ $group: { _id: '$stage', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       Startup.aggregate([{ $group: { _id: null, total: { $sum: '$fundingGoal' } } }]),
+      Startup.aggregate([{ $group: { _id: null, total: { $sum: '$fundingRaised' } } }]),
+      Startup.aggregate([{ $unwind: '$fundingRounds' }, { $count: 'count' }]),
     ]);
 
     res.json({
@@ -47,6 +51,8 @@ const getStats = async (req, res) => {
         acceptedConnections,
         totalMessages,
         totalFundingGoal: totalFundingGoal[0]?.total || 0,
+        totalFundingRaised: totalFundingRaised[0]?.total || 0,
+        totalFundingRounds: totalFundingRounds[0]?.count || 0,
         startupsByCategory,
         startupsByStage,
         recentUsers,
