@@ -31,7 +31,6 @@ export default function StartupDetail() {
   const [form, setForm] = useState({ message: '', minAmount: '', maxAmount: '' });
   const [submitting, setSubmitting] = useState(false);
   const hasFetched = useRef(false);
-
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
@@ -39,16 +38,20 @@ export default function StartupDetail() {
       .then(({ data }) => setStartup(data.startup))
       .catch(() => { toast.error('Startup not found'); navigate('/startups'); })
       .finally(() => setLoading(false));
+  }, [id, navigate]);
 
-    if (user) {
+  useEffect(() => {
+    if (user && id) {
       userAPI.saved()
         .then(({ data }) => {
           const isSaved = data.startups?.some((s) => s._id === id);
           setSaved(!!isSaved);
         })
         .catch(() => {});
+    } else {
+      setSaved(false);
     }
-  }, [id, user, navigate]);
+  }, [id, user]);
 
   const handleSave = async () => {
     if (!user) { navigate('/login'); return; }

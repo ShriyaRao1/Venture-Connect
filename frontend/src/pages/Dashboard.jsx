@@ -26,6 +26,7 @@ export default function Dashboard() {
   }, [user, navigate]);
 
   const [myStartups,    setMyStartups]    = useState([]);
+  const [savedStartups, setSavedStartups] = useState([]);
   const [allStartups,   setAllStartups]   = useState([]);  // investor Browse tab
   const [allInvestors,  setAllInvestors]  = useState([]);  // founder Browse tab
   const [connections,   setConnections]   = useState([]);
@@ -33,13 +34,13 @@ export default function Dashboard() {
   const [browseLoading, setBrowseLoading] = useState(false);
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
-    return ['startups', 'connections', 'browse'].includes(t) ? t : 'overview';
+    return ['startups', 'connections', 'browse', 'saved'].includes(t) ? t : 'overview';
   });
 
   // Sync tab from URL
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (['startups', 'connections', 'browse'].includes(t)) setTab(t);
+    if (['startups', 'connections', 'browse', 'saved'].includes(t)) setTab(t);
     else if (!t) setTab('overview');
   }, [searchParams]);
 
@@ -48,14 +49,16 @@ export default function Dashboard() {
     if (user?.role === 'admin') return; // admin is redirected
     const startupReq = user.role === 'founder'
       ? startupAPI.getMy()
-      : userAPI.saved();
+      : Promise.resolve({ data: { startups: [] } });
+    const savedReq = userAPI.saved();
     const connReq = user.role === 'founder'
       ? connectionAPI.received()
       : connectionAPI.sent();
 
-    Promise.all([startupReq, connReq])
-      .then(([s, c]) => {
+    Promise.all([startupReq, savedReq, connReq])
+      .then(([s, saved, c]) => {
         setMyStartups(s.data.startups ?? []);
+        setSavedStartups(saved.data.startups ?? []);
         setConnections(c.data.connections ?? []);
       })
       .catch(() => toast.error('Failed to load dashboard data'))
@@ -99,6 +102,7 @@ export default function Dashboard() {
     user.role === 'founder'
       ? { id: 'startups', label: 'My Startups' }
       : null,
+    { id: 'saved', label: `★ Saved Startups${savedStartups.length > 0 ? ` (${savedStartups.length})` : ''}` },
     {
       id:    'browse',
       label: user.role === 'investor' ? '🔍 Browse Startups' : '🔍 Browse Investors',
@@ -157,11 +161,14 @@ export default function Dashboard() {
             {/* Stat tiles */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: user.role === 'founder' ? 'My Startups' : 'Saved Startups', value: loading ? '—' : myStartups.length, icon: '🚀' },
+                user.role === 'founder'
+                  ? { label: 'My Startups', value: loading ? '—' : myStartups.length, icon: '🚀' }
+                  : null,
+                { label: 'Saved Startups', value: loading ? '—' : savedStartups.length, icon: '★' },
                 { label: 'Connections', value: loading ? '—' : connections.length, icon: '🤝' },
                 { label: 'Pending',     value: loading ? '—' : pending,            icon: '⏳' },
                 { label: 'Accepted',    value: loading ? '—' : accepted,           icon: '✅' },
-              ].map(({ label, value, icon }, i) => (
+              ].filter(Boolean).map(({ label, value, icon }, i) => (
                 <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
                   className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-4">
@@ -424,6 +431,22 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {myStartups.map((s, i) => <StartupCard key={s._id} startup={s} delay={i} />)}
+            </div>
+          )
+        )}
+        {/* ── Saved Startups ────────────────── */}
+        {tab === 'saved' && (
+          loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => <StartupCardSkeleton key={i} />)}
+            </div>
+          ) : savedStartups.length === 0 ? (
+            <div className="text-center py-16 border border-[#2a2a2a] rounded-xl">
+              <p className="text-[#555] text-sm">No saved startups yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedStartups.map((s, i) => <StartupCard key={s._id} startup={s} delay={i} />)}
             </div>
           )
         )}
