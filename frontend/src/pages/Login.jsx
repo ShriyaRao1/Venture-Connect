@@ -47,6 +47,7 @@ export default function Login() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-[#888]">Password</label>
+              <Link to="/forgot-password" className="text-[11px] text-[#00c853] hover:underline font-medium">Forgot password?</Link>
             </div>
             <input name="password" type="password" value={form.password} onChange={onChange} required
               placeholder="••••••••" className="al-input" autoComplete="new-password" />

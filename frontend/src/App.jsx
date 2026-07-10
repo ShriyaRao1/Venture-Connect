@@ -14,6 +14,8 @@ import Investors     from './pages/Investors';
 import Messages      from './pages/Messages';
 import CreateStartup from './pages/CreateStartup';
 import AdminPanel    from './pages/AdminPanel';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword  from './pages/ResetPassword';
 
 export default function App() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="/"             element={<Home />} />
           <Route path="/login"        element={<Login />} />
           <Route path="/register"     element={<Register />} />
+          <Route path="/forgot-password"   element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/startups"          element={<Startups />} />
           {/* /new must be before /:id or React Router will match 'new' as an id */}
           <Route path="/startups/new"      element={<ProtectedRoute allowedRoles={['founder']}><CreateStartup /></ProtectedRoute>} />
