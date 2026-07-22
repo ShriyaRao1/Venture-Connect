@@ -14,6 +14,7 @@ export default function Profile() {
     website:  user?.website  || '',
     linkedin: user?.linkedin || '',
     avatar:   user?.avatar   || '',
+    investorType: user?.investorType || 'Angel',
     investorPreferences: {
       sectors:   user?.investorPreferences?.sectors   || [],
       stages:    user?.investorPreferences?.stages    || [],
@@ -167,6 +168,21 @@ export default function Profile() {
               <h2 className="text-[11px] font-bold text-[#555] uppercase tracking-widest">Matchmaking Preferences</h2>
               <p className="text-[11px] text-[#555] -mt-2">Tailor your matchmaking score by indicating your focus sectors, stages, and locations.</p>
               
+              {/* Investor Type */}
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-1.5">Investor Type</label>
+                <select
+                  name="investorType"
+                  value={form.investorType}
+                  onChange={onChange}
+                  className="al-input bg-[#161616]"
+                >
+                  {['Angel', 'Venture Capital (VC)', 'Syndicate', 'Family Office', 'Corporate VC', 'Private Equity', 'Other'].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Preferred Sectors */}
               <div>
                 <label className="block text-xs font-semibold text-[#888] mb-2">Focus Sectors</label>

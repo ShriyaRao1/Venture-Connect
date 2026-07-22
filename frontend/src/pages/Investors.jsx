@@ -26,6 +26,7 @@ export default function Investors() {
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('All');
   const [stage, setStage] = useState('All');
+  const [investorType, setInvestorType] = useState('All');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
 
@@ -64,6 +65,8 @@ export default function Investors() {
       if (location) params.location = location;
       if (category !== 'All') params.category = category;
       if (stage !== 'All') params.stage = stage;
+      const typeFilter = overrides.investorType !== undefined ? overrides.investorType : investorType;
+      if (typeFilter !== 'All') params.investorType = typeFilter;
       
       // If founder, pass selected match startup
       if (user?.role === 'founder') {
@@ -86,7 +89,7 @@ export default function Investors() {
 
   useEffect(() => {
     fetchInvestors();
-  }, [page, category, stage, selectedMatchStartupId]);
+  }, [page, category, stage, investorType, selectedMatchStartupId]);
 
   // Load static saved status and connections for founders
   useEffect(() => {
@@ -215,10 +218,11 @@ export default function Investors() {
   const clearAllFilters = () => {
     setCategory('All');
     setStage('All');
+    setInvestorType('All');
     setSearch('');
     setLocation('');
     setPage(1);
-    fetchInvestors({ page: 1, category: 'All', stage: 'All', search: '', location: '' });
+    fetchInvestors({ page: 1, category: 'All', stage: 'All', investorType: 'All', search: '', location: '' });
   };
 
   const FilterChip = ({ label, active, onClick }) => (
@@ -249,10 +253,17 @@ export default function Investors() {
         <form onSubmit={handleSearch} className="flex gap-2 flex-wrap">
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name or bio..."
-            className="al-input w-52 py-2 text-xs" />
+            className="al-input w-48 py-2 text-xs" />
           <input value={location} onChange={(e) => setLocation(e.target.value)}
             placeholder="📍 Preferred location..."
-            className="al-input w-40 py-2 text-xs" />
+            className="al-input w-36 py-2 text-xs" />
+          <select value={investorType} onChange={(e) => { setInvestorType(e.target.value); setPage(1); }}
+            className="al-input bg-[#161616] w-36 py-2 text-xs border border-[#2a2a2a] rounded focus:outline-none text-[#aaa]">
+            <option value="All">All Investor Types</option>
+            {['Angel', 'Venture Capital (VC)', 'Syndicate', 'Family Office', 'Corporate VC', 'Private Equity', 'Other'].map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
           <button type="submit" className="btn-al px-4 py-2 text-xs rounded-md">Search</button>
         </form>
       </div>

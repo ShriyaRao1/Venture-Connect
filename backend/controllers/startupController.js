@@ -85,7 +85,9 @@ const getStartup = async (req, res) => {
       req.params.id,
       { $inc: { views: 1 } },
       { new: true }
-    ).populate('founder', 'name avatar bio location linkedin website');
+    )
+      .populate('founder', 'name avatar bio location linkedin website')
+      .populate('fundingRounds.investments.investor', 'name avatar');
 
     if (!startup) return res.status(404).json({ success: false, message: 'Startup not found' });
 
@@ -290,9 +292,19 @@ const investInRound = async (req, res) => {
         },
         { new: true }
       );
+      if (closedStartup) {
+        await closedStartup.populate([
+          { path: 'founder', select: 'name avatar bio location linkedin website' },
+          { path: 'fundingRounds.investments.investor', select: 'name avatar' }
+        ]);
+      }
       return res.json({ success: true, startup: closedStartup || updatedStartup });
     }
 
+    await updatedStartup.populate([
+      { path: 'founder', select: 'name avatar bio location linkedin website' },
+      { path: 'fundingRounds.investments.investor', select: 'name avatar' }
+    ]);
     res.json({ success: true, startup: updatedStartup });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

@@ -209,6 +209,11 @@ export default function InvestorDetail() {
           <div className="flex-1 min-w-60">
             <div className="flex flex-wrap gap-1.5 mb-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#888] font-medium">Investor</span>
+              {investor.investorType && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#00c853]/15 text-[#00c853] font-bold uppercase tracking-wider">
+                  {investor.investorType}
+                </span>
+              )}
               {investor.location && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] text-[#888] font-medium">
                   📍 {investor.location}

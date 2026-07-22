@@ -7,18 +7,19 @@ const calculateMatchScore = require('../utils/matchScore');
 // @access Public
 const getInvestors = async (req, res) => {
   try {
-    const { search, category, stage, location, page = 1, limit = 12 } = req.query;
+    const { search, category, stage, location, investorType, page = 1, limit = 12 } = req.query;
 
     const query = { role: 'investor' };
     if (category) query['investorPreferences.sectors'] = category;
     if (stage) query['investorPreferences.stages'] = stage;
     if (location) query.location = { $regex: new RegExp(location, 'i') };
     if (search) query.$text = { $search: search };
+    if (investorType && investorType !== 'All') query.investorType = investorType;
 
     const skip = (Number(page) - 1) * Number(limit);
     const [investors, total] = await Promise.all([
       User.find(query)
-        .select('name avatar bio location website linkedin investorPreferences')
+        .select('name avatar bio location website linkedin investorPreferences investorType')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit)),
@@ -83,7 +84,7 @@ const getUserProfile = async (req, res) => {
 // @access Private
 const updateProfile = async (req, res) => {
   try {
-    const allowed = ['name', 'bio', 'location', 'website', 'linkedin', 'avatar', 'investorPreferences'];
+    const allowed = ['name', 'bio', 'location', 'website', 'linkedin', 'avatar', 'investorPreferences', 'investorType'];
     const updates = {};
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

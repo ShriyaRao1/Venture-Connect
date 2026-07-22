@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema(
       stages: [{ type: String }],
       locations: [{ type: String }],
     },
+    investorType: {
+      type: String,
+      enum: ['Angel', 'Venture Capital (VC)', 'Syndicate', 'Family Office', 'Corporate VC', 'Private Equity', 'Other'],
+      default: undefined
+    },
     resetPasswordToken: { type: String, select: false },
     resetPasswordExpire: { type: Date, select: false },
   },

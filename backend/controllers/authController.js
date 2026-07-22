@@ -10,7 +10,7 @@ const generateToken = (id, role) =>
 // @access Public
 const register = async (req, res) => {
   try {
-    const { name, email, password, role, investorPreferences } = req.body;
+    const { name, email, password, role, investorPreferences, investorType } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
@@ -18,8 +18,9 @@ const register = async (req, res) => {
     if (exists) return res.status(409).json({ success: false, message: 'Email already registered' });
 
     const userData = { name, email, password, role };
-    if (role === 'investor' && investorPreferences) {
-      userData.investorPreferences = investorPreferences;
+    if (role === 'investor') {
+      if (investorPreferences) userData.investorPreferences = investorPreferences;
+      if (investorType) userData.investorType = investorType;
     }
 
     const user = await User.create(userData);

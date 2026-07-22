@@ -18,7 +18,23 @@ const expressInterest = async (req, res) => {
       return res.status(400).json({ success: false, message: 'You cannot invest in your own startup' });
 
     const existing = await Connection.findOne({ investor: req.user.id, startup: startupId });
-    if (existing) return res.status(409).json({ success: false, message: 'Already expressed interest' });
+    if (existing) {
+      if (existing.status === 'accepted') {
+        return res.status(409).json({ success: false, message: 'Already connected' });
+      }
+      if (existing.status === 'pending') {
+        return res.status(409).json({ success: false, message: 'Already expressed interest (pending response)' });
+      }
+      // If rejected, reuse and update the connection
+      existing.status = 'pending';
+      existing.initiatedBy = 'investor';
+      existing.message = message || existing.message;
+      if (investmentRange) existing.investmentRange = investmentRange;
+      existing.respondedAt = undefined;
+      await existing.save();
+      await existing.populate('investor', 'name avatar email');
+      return res.status(200).json({ success: true, connection: existing });
+    }
 
     const connection = await Connection.create({
       investor: req.user.id,
@@ -70,7 +86,21 @@ const requestInvestorConnection = async (req, res) => {
     // Validate duplicate connection (respecting the unique index on { investor, startup })
     const existing = await Connection.findOne({ investor: investorId, startup: startupId });
     if (existing) {
-      return res.status(409).json({ success: false, message: 'Connection request already exists for this investor and startup' });
+      if (existing.status === 'accepted') {
+        return res.status(409).json({ success: false, message: 'Already connected' });
+      }
+      if (existing.status === 'pending') {
+        return res.status(409).json({ success: false, message: 'Connection request already exists and is pending' });
+      }
+      // If rejected, reuse and update the connection
+      existing.status = 'pending';
+      existing.initiatedBy = 'founder';
+      existing.message = message || existing.message;
+      if (investmentRange) existing.investmentRange = investmentRange;
+      existing.respondedAt = undefined;
+      await existing.save();
+      await existing.populate('investor', 'name avatar email');
+      return res.status(200).json({ success: true, connection: existing });
     }
 
     const connection = await Connection.create({

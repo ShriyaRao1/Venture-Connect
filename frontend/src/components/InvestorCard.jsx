@@ -52,7 +52,14 @@ export default function InvestorCard({ inv, isSaved, onToggleSave, connectionSta
             </span>
           )}
         </div>
-        {inv.location && <p className="text-[11px] text-[#555] mt-0.5">📍 {inv.location}</p>}
+        <div className="flex items-center justify-center gap-1.5 mt-1 flex-wrap">
+          {inv.investorType && (
+            <span className="text-[9px] px-1.5 py-0.2 bg-[#1e1e1e] text-[#888] rounded font-semibold uppercase tracking-wider">
+              {inv.investorType}
+            </span>
+          )}
+          {inv.location && <span className="text-[10px] text-[#555]">📍 {inv.location}</span>}
+        </div>
       </div>
 
       {/* Bio */}

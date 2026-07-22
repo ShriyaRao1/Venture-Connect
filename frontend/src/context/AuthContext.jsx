@@ -24,10 +24,11 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async (name, email, password, role, investorPreferences = undefined) => {
+  const register = async (name, email, password, role, investorPreferences = undefined, investorType = undefined) => {
     const payload = { name, email, password, role };
-    if (role === 'investor' && investorPreferences) {
-      payload.investorPreferences = investorPreferences;
+    if (role === 'investor') {
+      if (investorPreferences) payload.investorPreferences = investorPreferences;
+      if (investorType) payload.investorType = investorType;
     }
     const { data } = await authAPI.register(payload);
     localStorage.setItem('vc_token', data.token);

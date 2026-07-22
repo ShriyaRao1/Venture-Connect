@@ -187,7 +187,7 @@ export default function Messages() {
                         : 'bg-[#1e1e1e] border border-[#2a2a2a] text-[#ddd] rounded-bl-md'
                     }`}>
                       <p>{msg.content}</p>
-                      <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-black/50' : 'text-[#555]'}`}>
+                      <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-black/50' : 'text-[#888]'}`}>
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>

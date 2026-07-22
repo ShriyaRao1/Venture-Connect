@@ -19,6 +19,7 @@ export default function Register() {
   const [sectors, setSectors] = useState([]);
   const [stages, setStages] = useState([]);
   const [locations, setLocations] = useState('');
+  const [investorType, setInvestorType] = useState('Angel');
 
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -64,7 +65,7 @@ export default function Register() {
         locations: locations.split(',').map((l) => l.trim()).filter(Boolean),
       } : undefined;
 
-      await register(form.name, form.email, form.password, form.role, prefs);
+      await register(form.name, form.email, form.password, form.role, prefs, form.role === 'investor' && usePreferences ? investorType : undefined);
       toast.success('Account created! Welcome to VentureConnect 🎉');
       navigate('/dashboard');
     } catch (err) {
@@ -199,6 +200,20 @@ export default function Register() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Investor Type */}
+              <div>
+                <label className="block text-xs font-semibold text-[#888] mb-1.5">Investor Type</label>
+                <select
+                  value={investorType}
+                  onChange={(e) => setInvestorType(e.target.value)}
+                  className="al-input bg-[#161616] text-xs"
+                >
+                  {['Angel', 'Venture Capital (VC)', 'Syndicate', 'Family Office', 'Corporate VC', 'Private Equity', 'Other'].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Locations */}

@@ -34,7 +34,7 @@ connectionSchema.pre('save', function (next) {
     if (min < 0 || max < 0) {
       return next(new Error('Investment range values must be non-negative'));
     }
-    if (min > max) {
+    if (max > 0 && min > max) {
       return next(new Error('Minimum investment range cannot exceed maximum'));
     }
   }
