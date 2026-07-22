@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { startupAPI, connectionAPI, userAPI } from '../api/api';
 import Sidebar from '../components/Sidebar';
 import StartupCard from '../components/StartupCard';
+import InvestorCard from '../components/InvestorCard';
 import { StartupCardSkeleton, InvestorCardSkeleton } from '../components/Skeletons';
 
 const STATUS_PILL = {
@@ -27,15 +28,27 @@ export default function Dashboard() {
 
   const [myStartups,    setMyStartups]    = useState([]);
   const [savedStartups, setSavedStartups] = useState([]);
+  const [savedInvestors, setSavedInvestors] = useState([]);
+  const [savedInvestorIds, setSavedInvestorIds] = useState(new Set());
   const [allStartups,   setAllStartups]   = useState([]);  // investor Browse tab
   const [allInvestors,  setAllInvestors]  = useState([]);  // founder Browse tab
-  const [connections,   setConnections]   = useState([]);
+  const [connections,   setConnections]   = useState([]);  // combined list for stats
+  const [sentConnections, setSentConnections] = useState([]);
+  const [receivedConnections, setReceivedConnections] = useState([]);
+  
   const [loading,       setLoading]       = useState(true);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
     return ['startups', 'connections', 'browse', 'saved'].includes(t) ? t : 'overview';
   });
+
+  // Modal states for connection request (founder inviting investor)
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [targetInvestor, setTargetInvestor] = useState(null);
+  const [selectedStartupId, setSelectedStartupId] = useState('');
+  const [connectMessage, setConnectMessage] = useState('');
+  const [sendingRequest, setSendingRequest] = useState(false);
 
   // Sync tab from URL
   useEffect(() => {
@@ -50,16 +63,31 @@ export default function Dashboard() {
     const startupReq = user.role === 'founder'
       ? startupAPI.getMy()
       : Promise.resolve({ data: { startups: [] } });
-    const savedReq = userAPI.saved();
-    const connReq = user.role === 'founder'
-      ? connectionAPI.received()
-      : connectionAPI.sent();
+      
+    const savedReq = user.role === 'founder'
+      ? userAPI.savedInvestors()
+      : userAPI.saved();
+      
+    const sentConnReq = connectionAPI.sent();
+    const recConnReq = connectionAPI.received();
 
-    Promise.all([startupReq, savedReq, connReq])
-      .then(([s, saved, c]) => {
+    Promise.all([startupReq, savedReq, sentConnReq, recConnReq])
+      .then(([s, saved, sentRes, recRes]) => {
         setMyStartups(s.data.startups ?? []);
-        setSavedStartups(saved.data.startups ?? []);
-        setConnections(c.data.connections ?? []);
+        
+        if (user.role === 'founder') {
+          setSavedInvestors(saved.data.investors ?? []);
+          setSavedInvestorIds(new Set(saved.data.investors?.map(inv => inv._id) ?? []));
+        } else {
+          setSavedStartups(saved.data.startups ?? []);
+        }
+        
+        const sent = sentRes.data.connections ?? [];
+        const received = recRes.data.connections ?? [];
+        
+        setSentConnections(sent);
+        setReceivedConnections(received);
+        setConnections([...sent, ...received]);
       })
       .catch(() => toast.error('Failed to load dashboard data'))
       .finally(() => setLoading(false));
@@ -83,17 +111,123 @@ export default function Dashboard() {
         .catch(() => toast.error('Failed to load investors'))
         .finally(() => setBrowseLoading(false));
     }
-  }, [tab, user.role]);
+  }, [tab, user.role, allStartups.length, allInvestors.length]);
 
   const handleRespond = async (id, status) => {
     try {
       await connectionAPI.respond(id, status);
       setConnections((prev) => prev.map((c) => c._id === id ? { ...c, status } : c));
+      setReceivedConnections((prev) => prev.map((c) => c._id === id ? { ...c, status } : c));
       toast.success(status === 'accepted' ? '✅ Connection accepted!' : 'Connection declined');
-    } catch { toast.error('Action failed'); }
+    } catch {
+      toast.error('Action failed');
+    }
   };
 
-  const pending  = connections.filter((c) => c.status === 'pending').length;
+  const handleToggleSave = async (investorId) => {
+    try {
+      const { data } = await userAPI.saveInvestor(investorId);
+      
+      setSavedInvestorIds((prev) => {
+        const next = new Set(prev);
+        if (data.saved) {
+          next.add(investorId);
+          toast.success('Investor saved to your list');
+        } else {
+          next.delete(investorId);
+          toast.success('Investor removed from saved');
+        }
+        return next;
+      });
+
+      if (data.saved) {
+        const investor = allInvestors.find(inv => inv._id === investorId);
+        if (investor) {
+          setSavedInvestors(prev => [investor, ...prev]);
+        } else {
+          userAPI.savedInvestors().then(({ data }) => setSavedInvestors(data.investors ?? []));
+        }
+      } else {
+        setSavedInvestors(prev => prev.filter(inv => inv._id !== investorId));
+      }
+    } catch {
+      toast.error('Failed to update save status');
+    }
+  };
+
+  const handleOpenConnectModal = (investor) => {
+    if (myStartups.length === 0) {
+      toast.error('You need to register at least one startup to connect with investors.');
+      return;
+    }
+    setTargetInvestor(investor);
+    
+    // Auto-select first available startup
+    const isAlreadyRequestSent = (startupId) => {
+      return connections.some(c => 
+        (c.startup?._id === startupId || c.startup === startupId) &&
+        (c.investor?._id === investor._id || c.investor === investor._id) &&
+        ['pending', 'accepted'].includes(c.status)
+      );
+    };
+    const available = myStartups.filter(s => !isAlreadyRequestSent(s._id));
+    if (available.length > 0) {
+      setSelectedStartupId(available[0]._id);
+    } else {
+      setSelectedStartupId('');
+    }
+
+    setShowConnectModal(true);
+  };
+
+  const handleConnectSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedStartupId) {
+      toast.error('Please select a startup first');
+      return;
+    }
+    setSendingRequest(true);
+    try {
+      const { data } = await connectionAPI.inviteInvestor({
+        investorId: targetInvestor._id,
+        startupId: selectedStartupId,
+        message: connectMessage,
+      });
+      setConnections((prev) => [...prev, data.connection]);
+      setSentConnections((prev) => [data.connection, ...prev]);
+      toast.success('Connection request sent to investor! 🎉');
+      setShowConnectModal(false);
+      setConnectMessage('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send connection request');
+    } finally {
+      setSendingRequest(false);
+    }
+  };
+
+  const getConnectionStatusForInvestor = (investorId) => {
+    const matches = connections.filter(c => 
+      (c.investor?._id === investorId || c.investor === investorId)
+    );
+    if (matches.some(c => c.status === 'accepted')) return 'accepted';
+    if (matches.some(c => c.status === 'pending')) return 'pending';
+    if (matches.some(c => c.status === 'rejected')) return 'rejected';
+    return null;
+  };
+
+  const getModalAvailableStartups = () => {
+    if (!targetInvestor) return [];
+    return myStartups.filter(s => {
+      const isAlreadyRequestSent = connections.some(c => 
+        (c.startup?._id === s._id || c.startup === s._id) &&
+        (c.investor?._id === targetInvestor._id || c.investor === targetInvestor._id) &&
+        ['pending', 'accepted'].includes(c.status)
+      );
+      return !isAlreadyRequestSent;
+    });
+  };
+
+  const pending  = receivedConnections.filter((c) => c.status === 'pending').length;
   const accepted = connections.filter((c) => c.status === 'accepted').length;
 
   const TABS = [
@@ -102,7 +236,9 @@ export default function Dashboard() {
     user.role === 'founder'
       ? { id: 'startups', label: 'My Startups' }
       : null,
-    { id: 'saved', label: `★ Saved Startups${savedStartups.length > 0 ? ` (${savedStartups.length})` : ''}` },
+    user.role === 'founder'
+      ? { id: 'saved', label: `★ Saved Investors${savedInvestors.length > 0 ? ` (${savedInvestors.length})` : ''}` }
+      : { id: 'saved', label: `★ Saved Startups${savedStartups.length > 0 ? ` (${savedStartups.length})` : ''}` },
     {
       id:    'browse',
       label: user.role === 'investor' ? '🔍 Browse Startups' : '🔍 Browse Investors',
@@ -117,6 +253,8 @@ export default function Dashboard() {
 
   // Don't render dashboard content for admin (they're being redirected)
   if (user?.role === 'admin') return null;
+
+  const availableForModal = getModalAvailableStartups();
 
   return (
     <div className="flex min-h-[calc(100vh-56px)]">
@@ -164,10 +302,12 @@ export default function Dashboard() {
                 user.role === 'founder'
                   ? { label: 'My Startups', value: loading ? '—' : myStartups.length, icon: '🚀' }
                   : null,
-                { label: 'Saved Startups', value: loading ? '—' : savedStartups.length, icon: '★' },
+                user.role === 'founder'
+                  ? { label: 'Saved Investors', value: loading ? '—' : savedInvestors.length, icon: '★' }
+                  : { label: 'Saved Startups', value: loading ? '—' : savedStartups.length, icon: '★' },
                 { label: 'Connections', value: loading ? '—' : connections.length, icon: '🤝' },
-                { label: 'Pending',     value: loading ? '—' : pending,            icon: '⏳' },
-                { label: 'Accepted',    value: loading ? '—' : accepted,           icon: '✅' },
+                { label: 'Pending Requests', value: loading ? '—' : pending,            icon: '⏳' },
+                { label: 'Accepted Connections', value: loading ? '—' : accepted,           icon: '✅' },
               ].filter(Boolean).map(({ label, value, icon }, i) => (
                 <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
@@ -188,13 +328,21 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-2">
                   {connections.slice(0, 3).map((c) => {
-                    const partner = user.role === 'founder' ? c.investor : c.startup;
+                    const isReceived = receivedConnections.some(rc => rc._id === c._id);
+                    const partner = user.role === 'founder' 
+                      ? c.investor 
+                      : (isReceived ? c.startup?.founder : c.startup);
                     return (
                       <div key={c._id} className="flex items-center gap-3 bg-[#161616] border border-[#2a2a2a] rounded-lg px-4 py-3">
                         <div className="w-7 h-7 rounded-full bg-[#00c853] flex items-center justify-center text-black font-bold text-xs shrink-0">
                           {(partner?.name?.[0] || '?').toUpperCase()}
                         </div>
-                        <span className="text-sm text-white flex-1">{partner?.name || '—'}</span>
+                        <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="text-sm text-white">{partner?.name || '—'}</span>
+                          <span className="text-[10px] text-[#555]">
+                            {isReceived ? 'Received' : 'Sent'} · {c.startup?.name ? `Startup: ${c.startup.name}` : ''}
+                          </span>
+                        </div>
                         <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>{c.status}</span>
                       </div>
                     );
@@ -264,156 +412,283 @@ export default function Dashboard() {
 
         {/* ── Connections ───────────────────── */}
         {tab === 'connections' && (
-          <div className="space-y-4">
-            {loading ? <Spinner /> : connections.length === 0 ? (
-              <div className="text-center py-16 border border-[#2a2a2a] rounded-xl">
-                <p className="text-[#555] text-sm">No connections yet.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {connections.map((c) => {
-                  if (user.role === 'founder') {
-                    const inv = c.investor;
-                    return (
-                      <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
-                        
-                        {/* Header: Investor Info */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex gap-3">
-                            <div className="w-10 h-10 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
-                              {(inv?.name?.[0] || '?').toUpperCase()}
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-white">{inv?.name || 'Unknown Investor'}</h3>
-                              {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
-                            </div>
-                          </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
-                            {c.status}
-                          </span>
-                        </div>
-
-                        {/* Details */}
-                        <div className="space-y-2 text-xs">
-                          {inv?.bio && <p className="text-[#888] line-clamp-2 leading-relaxed">{inv.bio}</p>}
-                          {c.startup && (
-                            <div className="flex items-center gap-1.5 mt-2">
-                              <span className="text-[10px] text-[#555]">Interested in:</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#00c853] font-semibold">
-                                {c.startup.name}
-                              </span>
-                            </div>
-                          )}
-                          {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
-                            <p className="text-white font-semibold mt-1">
-                              Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
-                            </p>
-                          )}
-                          {c.message && (
-                            <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
-                              "{c.message}"
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
-                          {inv?.linkedin && (
-                            <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline pt-2 mr-auto">
-                              LinkedIn ↗
-                            </a>
-                          )}
-                          {c.status === 'pending' && (
-                            <>
-                              <button onClick={() => handleRespond(c._id, 'accepted')}
-                                className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
-                                Accept
-                              </button>
-                              <button onClick={() => handleRespond(c._id, 'rejected')}
-                                className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
-                                Decline
-                              </button>
-                            </>
-                          )}
-                          {c.status === 'accepted' && (
-                            <button
-                              onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
-                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                              ✉ Message
-                            </button>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  } else {
-                    // Investor view: Sent connections (startup details card)
-                    const startup = c.startup;
-                    const founder = startup?.founder;
-                    return (
-                      <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
-                        
-                        {/* Header: Startup Info */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center font-black text-white text-sm shrink-0 overflow-hidden">
-                              {startup?.logo ? <img src={startup.logo} alt="" className="w-full h-full object-cover" /> : (startup?.name?.[0] || '?').toUpperCase()}
-                            </div>
-                            <div>
-                              <Link to={`/startups/${startup?._id}`} className="text-sm font-bold text-white hover:text-[#00c853] transition-colors">
-                                {startup?.name || 'Unknown Startup'}
-                              </Link>
-                              <div className="flex gap-1.5 mt-1">
-                                {startup?.category && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.category}</span>}
-                                {startup?.stage && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.stage}</span>}
+          <div className="space-y-8">
+            {/* 1. Received Connections Section */}
+            <div>
+              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Received Requests</h2>
+              {loading ? (
+                <Spinner />
+              ) : receivedConnections.length === 0 ? (
+                <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl">
+                  <p className="text-[#555] text-xs">No received requests.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {receivedConnections.map((c) => {
+                    if (user.role === 'founder') {
+                      // Founder received request from investor
+                      const inv = c.investor;
+                      return (
+                        <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
+                                {(inv?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-white">{inv?.name || 'Unknown Investor'}</h3>
+                                {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
                               </div>
                             </div>
-                          </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
-                            {c.status}
-                          </span>
-                        </div>
-
-                        {/* Details */}
-                        <div className="space-y-2 text-xs">
-                          {startup?.tagline && <p className="text-[#888] line-clamp-2 leading-relaxed">{startup.tagline}</p>}
-                          {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
-                            <p className="text-white font-semibold mt-1">
-                              Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
-                            </p>
-                          )}
-                          {c.message && (
-                            <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
-                              "{c.message}"
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
-                          {founder && (
-                            <span className="text-[10px] text-[#555] pt-2 mr-auto truncate max-w-[150px]">
-                              Founder: {founder.name}
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                              {c.status}
                             </span>
-                          )}
-                          <Link to={`/startups/${startup?._id}`} className="text-xs px-3 py-1.5 rounded-md border border-[#2a2a2a] text-[#888] hover:text-white transition-colors">
-                            Details
-                          </Link>
-                          {c.status === 'accepted' && founder && (
-                            <button
-                              onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
-                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                              ✉ Message Founder
-                            </button>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  }
-                })}
-              </div>
-            )}
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            {inv?.bio && <p className="text-[#888] line-clamp-2 leading-relaxed">{inv.bio}</p>}
+                            {c.startup && (
+                              <div className="flex items-center gap-1.5 mt-2">
+                                <span className="text-[10px] text-[#555]">Interested in:</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#00c853] font-semibold">
+                                  {c.startup.name}
+                                </span>
+                              </div>
+                            )}
+                            {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
+                              <p className="text-white font-semibold mt-1">
+                                Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
+                              </p>
+                            )}
+                            {c.message && (
+                              <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                                "{c.message}"
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                            {inv?.linkedin && (
+                              <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline pt-2 mr-auto">
+                                LinkedIn ↗
+                              </a>
+                            )}
+                            {c.status === 'pending' && (
+                              <>
+                                <button onClick={() => handleRespond(c._id, 'accepted')}
+                                  className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
+                                  Accept
+                                </button>
+                                <button onClick={() => handleRespond(c._id, 'rejected')}
+                                  className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
+                                  Decline
+                                </button>
+                              </>
+                            )}
+                            {c.status === 'accepted' && (
+                              <button
+                                onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
+                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                                ✉ Message
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    } else {
+                      // Investor received request from founder (startup-initiated)
+                      const startup = c.startup;
+                      const founder = startup?.founder;
+                      return (
+                        <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center font-black text-white text-sm shrink-0 overflow-hidden">
+                                {startup?.logo ? <img src={startup.logo} alt="" className="w-full h-full object-cover" /> : (startup?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <Link to={`/startups/${startup?._id}`} className="text-sm font-bold text-white hover:text-[#00c853] transition-colors">
+                                  {startup?.name || 'Unknown Startup'}
+                                </Link>
+                                <div className="flex gap-1.5 mt-1">
+                                  {startup?.category && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.category}</span>}
+                                  {startup?.stage && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.stage}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                              {c.status}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            {startup?.tagline && <p className="text-[#888] line-clamp-2 leading-relaxed">{startup.tagline}</p>}
+                            {founder && (
+                              <p className="text-[11px] text-[#555]">
+                                Founder: <span className="text-white font-semibold">{founder.name}</span>
+                              </p>
+                            )}
+                            {c.message && (
+                              <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                                "{c.message}"
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                            {c.status === 'pending' && (
+                              <>
+                                <button onClick={() => handleRespond(c._id, 'accepted')}
+                                  className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
+                                  Accept
+                                </button>
+                                <button onClick={() => handleRespond(c._id, 'rejected')}
+                                  className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
+                                  Decline
+                                </button>
+                              </>
+                            )}
+                            {c.status === 'accepted' && founder && (
+                              <button
+                                onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
+                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                                ✉ Message Founder
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Sent Connections Section */}
+            <div>
+              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Sent Requests</h2>
+              {loading ? (
+                <Spinner />
+              ) : sentConnections.length === 0 ? (
+                <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl">
+                  <p className="text-[#555] text-xs">No sent requests.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {sentConnections.map((c) => {
+                    if (user.role === 'investor') {
+                      // Investor sent request to startup
+                      const startup = c.startup;
+                      const founder = startup?.founder;
+                      return (
+                        <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center font-black text-white text-sm shrink-0 overflow-hidden">
+                                {startup?.logo ? <img src={startup.logo} alt="" className="w-full h-full object-cover" /> : (startup?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <Link to={`/startups/${startup?._id}`} className="text-sm font-bold text-white hover:text-[#00c853] transition-colors">
+                                  {startup?.name || 'Unknown Startup'}
+                                </Link>
+                                <div className="flex gap-1.5 mt-1">
+                                  {startup?.category && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.category}</span>}
+                                  {startup?.stage && <span className="text-[9px] px-1 py-0.2 bg-[#1e1e1e] text-[#888] rounded">{startup.stage}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                              {c.status}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            {startup?.tagline && <p className="text-[#888] line-clamp-2 leading-relaxed">{startup.tagline}</p>}
+                            {c.investmentRange && (c.investmentRange.min > 0 || c.investmentRange.max > 0) && (
+                              <p className="text-white font-semibold mt-1">
+                                Offer Range: <span className="text-[#00c853]">₹{(c.investmentRange.min/100000).toFixed(1)}L - ₹{(c.investmentRange.max/100000).toFixed(1)}L</span>
+                              </p>
+                            )}
+                            {c.message && (
+                              <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                                "{c.message}"
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                            {founder && (
+                              <span className="text-[10px] text-[#555] pt-2 mr-auto truncate max-w-[150px]">
+                                Founder: {founder.name}
+                              </span>
+                            )}
+                            <Link to={`/startups/${startup?._id}`} className="text-xs px-3 py-1.5 rounded-md border border-[#2a2a2a] text-[#888] hover:text-white transition-colors">
+                              Details
+                            </Link>
+                            {c.status === 'accepted' && founder && (
+                              <button
+                                onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
+                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                                ✉ Message Founder
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    } else {
+                      // Founder sent request to investor
+                      const inv = c.investor;
+                      return (
+                        <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                          className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3">
+                              <div className="w-10 h-10 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
+                                {(inv?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-white">{inv?.name || 'Unknown Investor'}</h3>
+                                {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
+                              </div>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                              {c.status}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            {inv?.bio && <p className="text-[#888] line-clamp-2 leading-relaxed">{inv.bio}</p>}
+                            {c.startup && (
+                              <div className="flex items-center gap-1.5 mt-2">
+                                <span className="text-[10px] text-[#555]">On behalf of:</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#00c853] font-semibold">
+                                  {c.startup.name}
+                                </span>
+                              </div>
+                            )}
+                            {c.message && (
+                              <div className="bg-[#0c0c0c] border border-[#2a2a2a] rounded-lg p-2.5 mt-2 text-[#aaa] italic">
+                                "{c.message}"
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                            {inv?.linkedin && (
+                              <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline pt-2 mr-auto">
+                                LinkedIn ↗
+                              </a>
+                            )}
+                            {c.status === 'accepted' && (
+                              <button
+                                onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
+                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                                ✉ Message
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -434,12 +709,40 @@ export default function Dashboard() {
             </div>
           )
         )}
-        {/* ── Saved Startups ────────────────── */}
+        
+        {/* ── Saved Items (Investors see saved Startups, Founders see saved Investors) ── */}
         {tab === 'saved' && (
           loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => <StartupCardSkeleton key={i} />)}
-            </div>
+            user.role === 'founder' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {Array.from({ length: 5 }).map((_, i) => <InvestorCardSkeleton key={i} />)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => <StartupCardSkeleton key={i} />)}
+              </div>
+            )
+          ) : user.role === 'founder' ? (
+            savedInvestors.length === 0 ? (
+              <div className="text-center py-16 border border-[#2a2a2a] rounded-xl">
+                <p className="text-[#555] text-sm">No saved investors yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {savedInvestors.map((inv, i) => (
+                  <InvestorCard
+                    key={inv._id}
+                    inv={inv}
+                    isSaved={savedInvestorIds.has(inv._id)}
+                    onToggleSave={handleToggleSave}
+                    connectionStatus={getConnectionStatusForInvestor(inv._id)}
+                    onConnect={handleOpenConnectModal}
+                    delay={i}
+                    currentUser={user}
+                  />
+                ))}
+              </div>
+            )
           ) : savedStartups.length === 0 ? (
             <div className="text-center py-16 border border-[#2a2a2a] rounded-xl">
               <p className="text-[#555] text-sm">No saved startups yet.</p>
@@ -504,34 +807,16 @@ export default function Dashboard() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {allInvestors.map((inv, i) => (
-                      <motion.div key={inv._id}
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.04 }}
-                        className="al-card p-5 flex flex-col items-center text-center gap-2.5">
-                        <div className="w-14 h-14 rounded-full bg-[#00c853] flex items-center justify-center text-black font-black text-xl overflow-hidden">
-                          {inv.avatar
-                            ? <img src={inv.avatar} alt={inv.name} className="w-full h-full object-cover" />
-                            : inv.name[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-white truncate max-w-[120px]">{inv.name}</h3>
-                          {inv.location && <p className="text-[11px] text-[#555]">📍 {inv.location}</p>}
-                        </div>
-                        <p className="text-xs text-[#888] line-clamp-3 leading-relaxed">{inv.bio || 'Investor on VentureConnect'}</p>
-                        <div className="flex gap-2 justify-center flex-wrap mt-auto">
-                          {inv.website && (
-                            <a href={inv.website} target="_blank" rel="noreferrer" className="text-[10px] text-[#00c853] hover:underline">Web ↗</a>
-                          )}
-                          {inv.linkedin && (
-                            <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline">LinkedIn ↗</a>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
-                          className="w-full mt-1 text-[10px] px-3 py-1.5 rounded-md bg-[#00c853]/10 text-[#00c853] hover:bg-[#00c853]/20 font-semibold transition-colors">
-                          ✉ Message
-                        </button>
-                      </motion.div>
+                      <InvestorCard
+                        key={inv._id}
+                        inv={inv}
+                        isSaved={savedInvestorIds.has(inv._id)}
+                        onToggleSave={handleToggleSave}
+                        connectionStatus={getConnectionStatusForInvestor(inv._id)}
+                        onConnect={handleOpenConnectModal}
+                        delay={i}
+                        currentUser={user}
+                      />
                     ))}
                   </div>
                 )}
@@ -541,6 +826,94 @@ export default function Dashboard() {
         )}
 
       </main>
+
+      {/* Invite Investor Modal */}
+      <AnimatePresence>
+        {showConnectModal && targetInvestor && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowConnectModal(false)}
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-6 w-full max-w-md"
+            >
+              <h2 className="text-base font-black text-white mb-1">Invite {targetInvestor.name}</h2>
+              <p className="text-xs text-[#888] mb-5">
+                Send a connection request to this investor targeting one of your startups.
+              </p>
+
+              {availableForModal.length === 0 ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-amber-500/80 bg-amber-500/5 border border-amber-500/10 rounded-lg p-3 leading-relaxed text-center">
+                    ⚠️ You have already sent connection requests or connected all of your startups with this investor.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectModal(false)}
+                    className="w-full btn-ghost py-2 text-xs rounded-md"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleConnectSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#888] mb-1.5">Target Startup *</label>
+                    <select
+                      value={selectedStartupId}
+                      onChange={(e) => setSelectedStartupId(e.target.value)}
+                      className="al-input bg-[#161616] w-full"
+                      required
+                    >
+                      {availableForModal.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.name} ({s.stage})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#888] mb-1.5">Personal Message (Optional)</label>
+                    <textarea
+                      rows={4}
+                      value={connectMessage}
+                      onChange={(e) => setConnectMessage(e.target.value)}
+                      placeholder="Introduce your startup and explain why you want to connect with them."
+                      className="al-input w-full resize-none"
+                      maxLength={500}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowConnectModal(false)}
+                      className="btn-ghost px-4 py-2 text-xs rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sendingRequest}
+                      className="btn-al px-5 py-2 text-xs rounded-md"
+                    >
+                      {sendingRequest ? 'Sending...' : 'Send Invite'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -11,11 +11,13 @@ import Startups      from './pages/Startups';
 import StartupDetail from './pages/StartupDetail';
 import Dashboard     from './pages/Dashboard';
 import Investors     from './pages/Investors';
+import InvestorDetail from './pages/InvestorDetail';
 import Messages      from './pages/Messages';
 import CreateStartup from './pages/CreateStartup';
 import AdminPanel    from './pages/AdminPanel';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
+import Profile       from './pages/Profile';
 
 export default function App() {
   return (
@@ -53,10 +55,12 @@ export default function App() {
           <Route path="/startups/:id/edit" element={<ProtectedRoute allowedRoles={['founder']}><CreateStartup /></ProtectedRoute>} />
           <Route path="/startups/:id"      element={<StartupDetail />} />
           <Route path="/investors"    element={<Investors />} />
+          <Route path="/investors/:id" element={<InvestorDetail />} />
 
           {/* Protected */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/messages"  element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+          <Route path="/profile"   element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
           {/* Admin only */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPanel /></ProtectedRoute>} />

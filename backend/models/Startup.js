@@ -37,7 +37,7 @@ const startupSchema = new mongoose.Schema(
       roundName: { type: String, required: true },
       targetAmount: { type: Number, required: true },
       raisedAmount: { type: Number, default: 0 },
-      equityOffered: { type: Number, required: true },
+      equityOffered: { type: Number, required: true, min: 0, max: 100 },
       status: { type: String, enum: ['Open', 'Closed'], default: 'Open' },
       closedAt: { type: Date },
       investments: [{

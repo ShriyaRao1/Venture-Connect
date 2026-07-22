@@ -50,6 +50,7 @@ export const startupAPI = {
 // ── Connections ───────────────────────────────────────────────────────────────
 export const connectionAPI = {
   express:  (data)       => api.post('/connections', data),
+  inviteInvestor: (data) => api.post('/connections/invite-investor', data),
   received: ()           => api.get('/connections/received'),
   sent:     ()           => api.get('/connections/sent'),
   respond:  (id, status) => api.put(`/connections/${id}`, { status }),
@@ -58,11 +59,14 @@ export const connectionAPI = {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const userAPI = {
-  investors:     ()     => api.get('/users/investors'),
+  investors:     (params) => api.get('/users/investors', { params }),
+  getInvestor:   (id, params) => api.get(`/users/investors/${id}`, { params }),
   profile:       (id)   => api.get(`/users/${id}`),
   updateProfile: (data) => api.put('/users/profile', data),
   updatePassword:(data) => api.put('/users/password', data),
   saved:         ()     => api.get('/users/saved'),
+  saveInvestor:   (id)   => api.post(`/users/${id}/save-investor`),
+  savedInvestors: ()     => api.get('/users/saved-investors'),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────

@@ -1,55 +1,7 @@
 const Startup = require('../models/Startup');
 const User = require('../models/User');
 
-const calculateMatchScore = (startup, investor) => {
-  if (!investor || investor.role !== 'investor') return null;
-
-  let score = 0;
-  const prefs = investor.investorPreferences;
-
-  // 1. Sector/Category Match (40 points)
-  if (prefs?.sectors?.length > 0) {
-    if (prefs.sectors.includes(startup.category)) {
-      score += 40;
-    }
-  } else {
-    const bioText = (investor.bio || '').toLowerCase();
-    const catText = startup.category.toLowerCase();
-    if (bioText.includes(catText) || (catText === 'ai/ml' && (bioText.includes('artificial') || bioText.includes('machine learning') || bioText.includes('ai') || bioText.includes('ml')))) {
-      score += 40;
-    } else {
-      score += 25;
-    }
-  }
-
-  // 2. Stage Match (35 points)
-  if (prefs?.stages?.length > 0) {
-    if (prefs.stages.includes(startup.stage)) {
-      score += 35;
-    }
-  } else {
-    score += 20;
-  }
-
-  // 3. Location Match (25 points)
-  if (prefs?.locations?.length > 0) {
-    if (prefs.locations.some(loc => loc.toLowerCase().trim() === startup.location.toLowerCase().trim())) {
-      score += 25;
-    }
-  } else if (investor.location && startup.location) {
-    const invLoc = investor.location.toLowerCase().split(',')[0].trim();
-    const stLoc = startup.location.toLowerCase().split(',')[0].trim();
-    if (invLoc === stLoc && invLoc.length > 0) {
-      score += 25;
-    } else {
-      score += 15;
-    }
-  } else {
-    score += 15;
-  }
-
-  return Math.min(Math.max(score, 60), 100);
-};
+const calculateMatchScore = require('../utils/matchScore');
 
 // @desc  Create a startup
 // @route POST /api/startups
@@ -188,7 +140,17 @@ const deleteStartup = async (req, res) => {
     if (startup.founder.toString() !== req.user.id)
       return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    await startup.deleteOne();
+    const Connection = require('../models/Connection');
+    const Message = require('../models/Message');
+    const User = require('../models/User');
+
+    await Promise.all([
+      startup.deleteOne(),
+      Connection.deleteMany({ startup: req.params.id }),
+      Message.deleteMany({ relatedStartup: req.params.id }),
+      User.updateMany({}, { $pull: { savedStartups: req.params.id } }),
+    ]);
+
     res.json({ success: true, message: 'Startup deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -269,33 +231,69 @@ const addFundingRound = async (req, res) => {
 // @access Private (connected investor only)
 const investInRound = async (req, res) => {
   try {
+    if (req.user.role !== 'investor') {
+      return res.status(403).json({ success: false, message: 'Only investors are permitted to invest' });
+    }
+
     const { amount } = req.body;
-    const startup = await Startup.findById(req.params.id);
-    if (!startup) return res.status(404).json({ success: false, message: 'Startup not found' });
+    const investmentAmount = Number(amount);
+    if (isNaN(investmentAmount) || investmentAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid investment amount' });
+    }
 
     // Check accepted connection
     const Connection = require('../models/Connection');
     const conn = await Connection.findOne({ investor: req.user.id, startup: req.params.id, status: 'accepted' });
     if (!conn) return res.status(403).json({ success: false, message: 'You must have an accepted connection to invest' });
 
-    // Find active round
-    const openRound = startup.fundingRounds.find((r) => r.status === 'Open');
-    if (!openRound) return res.status(400).json({ success: false, message: 'No active open funding round found' });
+    // Atomically increment values and push new investment to the active open round
+    const updatedStartup = await Startup.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        'fundingRounds.status': 'Open',
+      },
+      {
+        $inc: {
+          fundingRaised: investmentAmount,
+          'fundingRounds.$.raisedAmount': investmentAmount,
+        },
+        $push: {
+          'fundingRounds.$.investments': {
+            investor: req.user.id,
+            amount: investmentAmount,
+            date: new Date(),
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    );
 
-    openRound.investments.push({
-      investor: req.user.id,
-      amount: Number(amount),
-    });
-    openRound.raisedAmount += Number(amount);
-    startup.fundingRaised += Number(amount);
-
-    if (openRound.raisedAmount >= openRound.targetAmount) {
-      openRound.status = 'Closed';
-      openRound.closedAt = new Date();
+    if (!updatedStartup) {
+      return res.status(400).json({ success: false, message: 'No active open funding round found' });
     }
 
-    await startup.save();
-    res.json({ success: true, startup });
+    // Check if the target amount was reached and if we should auto-close this round
+    const activeRound = updatedStartup.fundingRounds.find((r) => r.status === 'Open');
+    if (activeRound && activeRound.raisedAmount >= activeRound.targetAmount) {
+      // Close the round atomically
+      const closedStartup = await Startup.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          'fundingRounds._id': activeRound._id,
+          'fundingRounds.status': 'Open', // Prevent double-closing / conflicts
+        },
+        {
+          $set: {
+            'fundingRounds.$.status': 'Closed',
+            'fundingRounds.$.closedAt': new Date(),
+          },
+        },
+        { new: true }
+      );
+      return res.json({ success: true, startup: closedStartup || updatedStartup });
+    }
+
+    res.json({ success: true, startup: updatedStartup });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

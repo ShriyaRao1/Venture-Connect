@@ -10,26 +10,25 @@ const generateToken = (id, role) =>
 // @access Public
 const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, investorPreferences } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ success: false, message: 'Email already registered' });
 
-    const user = await User.create({ name, email, password, role });
+    const userData = { name, email, password, role };
+    if (role === 'investor' && investorPreferences) {
+      userData.investorPreferences = investorPreferences;
+    }
+
+    const user = await User.create(userData);
     const token = generateToken(user._id, user.role);
 
     res.status(201).json({
       success: true,
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-      },
+      user: user.toPublicJSON(),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -54,13 +53,7 @@ const login = async (req, res) => {
     res.json({
       success: true,
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-      },
+      user: user.toPublicJSON(),
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -88,7 +81,7 @@ const forgotPassword = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select('+resetPasswordToken +resetPasswordExpire');
     // Always respond with success to avoid email enumeration
     if (!user) return res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
 
@@ -163,7 +156,7 @@ const resetPassword = async (req, res) => {
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() },
-    });
+    }).select('+resetPasswordToken +resetPasswordExpire');
 
     if (!user)
       return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });

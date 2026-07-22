@@ -113,8 +113,11 @@ export default function Navbar() {
               )}
               <div className="border-t border-[#2a2a2a] mt-2 pt-3 flex flex-col gap-2">
                 {user ? (
-                  <button onClick={() => { logout(); navigate('/'); setOpen(false); }}
-                    className="text-left text-sm text-red-500 py-1">Sign out</button>
+                  <>
+                    <Link to="/profile" onClick={() => setOpen(false)} className="text-sm text-[#888] py-1">Profile</Link>
+                    <button onClick={() => { logout(); navigate('/'); setOpen(false); }}
+                      className="text-left text-sm text-red-500 py-1">Sign out</button>
+                  </>
                 ) : (
                   <>
                     <Link to="/login" onClick={() => setOpen(false)} className="text-sm text-[#888] py-1.5">Log in</Link>

@@ -5,9 +5,10 @@ const FOUNDER_LINKS = [
   { to: '/dashboard',                    label: 'Overview',     icon: '▦' },
   { to: '/dashboard?tab=startups',       label: 'My Startups',  icon: '🚀' },
   { to: '/dashboard?tab=connections',    label: 'Connections',  icon: '🤝' },
-  { to: '/dashboard?tab=saved',          label: 'Saved Startups', icon: '★' },
+  { to: '/dashboard?tab=saved',          label: 'Saved Investors', icon: '★' },
   { to: '/dashboard?tab=browse',         label: 'Browse Investors', icon: '🔍' },
   { to: '/messages',                     label: 'Messages',     icon: '✉' },
+  { to: '/profile',                      label: 'Profile',      icon: '👤' },
 ];
 
 const INVESTOR_LINKS = [
@@ -17,6 +18,7 @@ const INVESTOR_LINKS = [
   { to: '/dashboard?tab=saved',          label: 'Saved Startups', icon: '★' },
   { to: '/investors',                    label: 'Network',      icon: '👥' },
   { to: '/messages',                     label: 'Messages',     icon: '✉' },
+  { to: '/profile',                      label: 'Profile',      icon: '👤' },
 ];
 
 const ADMIN_LINKS = [

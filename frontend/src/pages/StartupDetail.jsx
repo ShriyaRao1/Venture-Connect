@@ -63,7 +63,10 @@ export default function StartupDetail() {
           const isSaved = data.startups?.some((s) => s._id === id);
           setSaved(!!isSaved);
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error(err);
+          toast.error('Failed to sync saved status');
+        });
 
       const connReq = user.role === 'founder'
         ? connectionAPI.received()
@@ -75,7 +78,10 @@ export default function StartupDetail() {
           );
           if (match) setConnectionStatus(match.status);
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error(err);
+          toast.error('Failed to sync connection status');
+        });
     } else {
       setSaved(false);
       setConnectionStatus(null);

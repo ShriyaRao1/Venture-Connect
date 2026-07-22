@@ -21,13 +21,14 @@ const userSchema = new mongoose.Schema(
     linkedin: { type: String, default: '' },
     isVerified: { type: Boolean, default: false },
     savedStartups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Startup' }],
+    savedInvestors: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     investorPreferences: {
       sectors: [{ type: String }],
       stages: [{ type: String }],
       locations: [{ type: String }],
     },
-    resetPasswordToken:  { type: String, default: undefined },
-    resetPasswordExpire: { type: Date,   default: undefined },
+    resetPasswordToken: { type: String, select: false },
+    resetPasswordExpire: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -46,5 +47,7 @@ userSchema.methods.toPublicJSON = function () {
   delete obj.password;
   return obj;
 };
+
+userSchema.index({ name: 'text', bio: 'text' });
 
 module.exports = mongoose.model('User', userSchema);
