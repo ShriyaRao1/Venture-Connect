@@ -4,7 +4,26 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const rateLimit = require('express-rate-limit');
-const mongoSanitize = require('express-mongo-sanitize');
+
+// Custom NoSQL Query Injection Sanitizer (Express 5 compatible)
+const sanitizeObject = (obj) => {
+  if (obj && typeof obj === 'object') {
+    for (const key in obj) {
+      if (key.startsWith('$')) {
+        delete obj[key];
+      } else {
+        sanitizeObject(obj[key]);
+      }
+    }
+  }
+};
+
+const mongoSanitize = (req, res, next) => {
+  if (req.body) sanitizeObject(req.body);
+  if (req.query) sanitizeObject(req.query);
+  if (req.params) sanitizeObject(req.params);
+  next();
+};
 
 dotenv.config();
 
@@ -37,7 +56,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(mongoSanitize());
+app.use(mongoSanitize);
 
 // ── Rate Limiting Applications ───────────────────────────────────────────────
 app.use('/api/auth/login', authLimiter);
