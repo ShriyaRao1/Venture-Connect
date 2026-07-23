@@ -96,6 +96,7 @@ const forgotPassword = async (req, res) => {
 
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
 
+    let emailSent = false;
     // ── Send email if SMTP is configured ────────────────────────────────────
     if (
       process.env.SMTP_EMAIL &&
@@ -134,6 +135,7 @@ const forgotPassword = async (req, res) => {
       });
 
       console.log(`\n✅ Password reset email sent to ${user.email}`);
+      emailSent = true;
     } else {
       // Fallback: log reset link for local dev without SMTP
       console.log('\n🔑 PASSWORD RESET LINK (copy into browser):');
@@ -141,7 +143,7 @@ const forgotPassword = async (req, res) => {
       console.log('');
     }
 
-    res.json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent.', emailSent });
   } catch (err) {
     console.error('forgotPassword error:', err.message);
     res.status(500).json({ success: false, message: 'Failed to send reset email. Try again.' });

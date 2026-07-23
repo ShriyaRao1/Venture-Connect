@@ -8,12 +8,14 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await authAPI.forgotPassword(email);
+      const { data } = await authAPI.forgotPassword(email);
+      setEmailSent(!!data.emailSent);
       setSent(true);
       toast.success('Reset link generated!');
     } catch (err) {
@@ -41,9 +43,15 @@ export default function ForgotPassword() {
             className="border border-[#2a2a2a] rounded-xl p-6 text-center space-y-3">
             <div className="text-4xl">🔑</div>
             <p className="text-sm font-bold text-white">Reset link generated!</p>
-            <p className="text-xs text-[#888] leading-relaxed">
-              Check the <span className="text-[#00c853] font-semibold">backend terminal</span> (nodemon output) for the reset link — copy it and open it in your browser.
-            </p>
+            {emailSent ? (
+              <p className="text-xs text-[#888] leading-relaxed">
+                We've sent a password reset link to <span className="text-[#00c853] font-semibold">{email}</span>. Please check your inbox (and spam folder).
+              </p>
+            ) : (
+              <p className="text-xs text-[#888] leading-relaxed">
+                Check the <span className="text-[#00c853] font-semibold">backend terminal</span> (nodemon output) for the reset link — copy it and open it in your browser.
+              </p>
+            )}
             <p className="text-[10px] text-[#555] mt-2">The link expires in 1 hour.</p>
             <button onClick={() => setSent(false)}
               className="text-xs text-[#00c853] hover:underline mt-2">
