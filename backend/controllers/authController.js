@@ -97,7 +97,12 @@ const forgotPassword = async (req, res) => {
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${rawToken}`;
 
     // ── Send email if SMTP is configured ────────────────────────────────────
-    if (process.env.SMTP_EMAIL && process.env.SMTP_APP_PASSWORD) {
+    if (
+      process.env.SMTP_EMAIL &&
+      process.env.SMTP_EMAIL !== 'your_gmail@gmail.com' &&
+      process.env.SMTP_APP_PASSWORD &&
+      process.env.SMTP_APP_PASSWORD !== 'your_16_char_app_password'
+    ) {
       const nodemailer = require('nodemailer');
 
       const transporter = nodemailer.createTransport({
