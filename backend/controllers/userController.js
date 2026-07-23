@@ -9,6 +9,17 @@ const getInvestors = async (req, res) => {
   try {
     const { search, category, stage, location, investorType, page = 1, limit = 12 } = req.query;
 
+    // Parse token if provided to see if requesting user is a founder
+    let requestingUser = null;
+    if (req.headers.authorization?.startsWith('Bearer')) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        requestingUser = await User.findById(decoded.id);
+      } catch (err) {}
+    }
+
     const query = { role: 'investor' };
     if (category) query['investorPreferences.sectors'] = category;
     if (stage) query['investorPreferences.stages'] = stage;
@@ -25,17 +36,6 @@ const getInvestors = async (req, res) => {
         .limit(Number(limit)),
       User.countDocuments(query),
     ]);
-
-    // Parse token if provided to see if requesting user is a founder
-    let requestingUser = null;
-    if (req.headers.authorization?.startsWith('Bearer')) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        requestingUser = await User.findById(decoded.id);
-      } catch (err) {}
-    }
 
     let startup = null;
     if (requestingUser && requestingUser.role === 'founder') {

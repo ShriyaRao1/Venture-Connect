@@ -68,15 +68,17 @@ export default function StartupDetail() {
           toast.error('Failed to sync saved status');
         });
 
-      const connReq = user.role === 'founder'
-        ? connectionAPI.received()
-        : connectionAPI.sent();
-      connReq
-        .then(({ data }) => {
-          const match = data.connections?.find(c => 
+      Promise.all([connectionAPI.sent(), connectionAPI.received()])
+        .then(([sentRes, recRes]) => {
+          const allConns = [
+            ...(sentRes.data.connections ?? []),
+            ...(recRes.data.connections ?? [])
+          ];
+          const match = allConns.find(c => 
             (c.startup?._id || c.startup) === id
           );
           if (match) setConnectionStatus(match.status);
+          else setConnectionStatus(null);
         })
         .catch((err) => {
           console.error(err);

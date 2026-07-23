@@ -230,6 +230,10 @@ export default function Dashboard() {
   const pending  = receivedConnections.filter((c) => c.status === 'pending').length;
   const accepted = connections.filter((c) => c.status === 'accepted').length;
 
+  const activeList = connections.filter((c) => c.status === 'accepted');
+  const pendingReceived = receivedConnections.filter((c) => c.status === 'pending');
+  const pendingSent = sentConnections.filter((c) => c.status === 'pending');
+
   const TABS = [
     { id: 'overview',    label: 'Overview'   },
     { id: 'connections', label: `Connections${pending > 0 ? ` (${pending})` : ''}` },
@@ -413,20 +417,108 @@ export default function Dashboard() {
         {/* ── Connections ───────────────────── */}
         {tab === 'connections' && (
           <div className="space-y-8">
-            {/* 1. Received Connections Section */}
+            {/* 1. Active Connections Section */}
             <div>
-              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Received Requests</h2>
+              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Active Connections ({activeList.length})</h2>
               {loading ? (
                 <Spinner />
-              ) : receivedConnections.length === 0 ? (
-                <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl">
-                  <p className="text-[#555] text-xs">No received requests.</p>
+              ) : activeList.length === 0 ? (
+                <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl bg-[#111]/20">
+                  <p className="text-[#555] text-xs">No active connections yet.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {receivedConnections.map((c) => {
+                  {activeList.map((c) => {
+                    const isReceived = receivedConnections.some(rc => rc._id === c._id);
+                    const partner = user.role === 'founder' 
+                      ? c.investor 
+                      : (isReceived ? c.startup?.founder : c.startup);
+                    
+                    return (
+                      <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-5 flex flex-col justify-between gap-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3">
+                            {user.role === 'founder' ? (
+                              <div className="w-10 h-10 rounded-full bg-[#00c853] flex items-center justify-center font-black text-black text-sm shrink-0">
+                                {(partner?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center font-black text-white text-sm shrink-0 overflow-hidden">
+                                {c.startup?.logo ? <img src={c.startup.logo} alt="" className="w-full h-full object-cover" /> : (c.startup?.name?.[0] || '?').toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="text-sm font-bold text-white">
+                                {user.role === 'founder' ? partner?.name : c.startup?.name}
+                              </h3>
+                              {user.role === 'founder' ? (
+                                <p className="text-[10px] text-[#555] mt-0.5">
+                                  {partner?.investorType ? `💼 ${partner.investorType}` : 'Investor'} · {partner?.location ? `📍 ${partner.location}` : ''}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-[#555] mt-0.5">
+                                  Category: {c.startup?.category} · Stage: {c.startup?.stage}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-[#00c853]/15 text-[#00c853]">
+                            Connected
+                          </span>
+                        </div>
+                        <div className="text-xs text-[#888]">
+                          {user.role === 'founder' ? (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span>Connected on Startup:</span>
+                              <span className="px-1.5 py-0.5 rounded bg-[#1e1e1e] border border-[#2a2a2a] text-[#00c853] font-semibold">
+                                {c.startup?.name}
+                              </span>
+                            </div>
+                          ) : (
+                            partner && (
+                              <p className="text-[11px]">
+                                Founder: <span className="text-white font-semibold">{partner.name}</span>
+                              </p>
+                            )
+                          )}
+                        </div>
+                        <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
+                          {user.role === 'founder' && partner && (
+                            <button
+                              onClick={() => navigate(`/messages?with=${partner._id}&name=${encodeURIComponent(partner.name)}`)}
+                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                              ✉ Message Investor
+                            </button>
+                          )}
+                          {user.role === 'investor' && partner && (
+                            <button
+                              onClick={() => navigate(`/messages?with=${partner._id}&name=${encodeURIComponent(partner.name)}`)}
+                              className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
+                              ✉ Message Founder
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Received Pending Requests Section */}
+            <div>
+              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Received Invites (Pending)</h2>
+              {loading ? (
+                <Spinner />
+              ) : pendingReceived.length === 0 ? (
+                <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl">
+                  <p className="text-[#555] text-xs">No pending received invites.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pendingReceived.map((c) => {
                     if (user.role === 'founder') {
-                      // Founder received request from investor
                       const inv = c.investor;
                       return (
                         <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -441,7 +533,7 @@ export default function Dashboard() {
                                 {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
                               </div>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-semibold pill-amber">
                               {c.status}
                             </span>
                           </div>
@@ -472,30 +564,18 @@ export default function Dashboard() {
                                 LinkedIn ↗
                               </a>
                             )}
-                            {c.status === 'pending' && (
-                              <>
-                                <button onClick={() => handleRespond(c._id, 'accepted')}
-                                  className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
-                                  Accept
-                                </button>
-                                <button onClick={() => handleRespond(c._id, 'rejected')}
-                                  className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
-                                  Decline
-                                </button>
-                              </>
-                            )}
-                            {c.status === 'accepted' && (
-                              <button
-                                onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
-                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                                ✉ Message
-                              </button>
-                            )}
+                            <button onClick={() => handleRespond(c._id, 'accepted')}
+                              className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
+                              Accept
+                            </button>
+                            <button onClick={() => handleRespond(c._id, 'rejected')}
+                              className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
+                              Decline
+                            </button>
                           </div>
                         </motion.div>
                       );
                     } else {
-                      // Investor received request from founder (startup-initiated)
                       const startup = c.startup;
                       const founder = startup?.founder;
                       return (
@@ -516,7 +596,7 @@ export default function Dashboard() {
                                 </div>
                               </div>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-semibold pill-amber">
                               {c.status}
                             </span>
                           </div>
@@ -534,25 +614,14 @@ export default function Dashboard() {
                             )}
                           </div>
                           <div className="flex gap-2 justify-end mt-auto pt-2 border-t border-[#2a2a2a]/40">
-                            {c.status === 'pending' && (
-                              <>
-                                <button onClick={() => handleRespond(c._id, 'accepted')}
-                                  className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
-                                  Accept
-                                </button>
-                                <button onClick={() => handleRespond(c._id, 'rejected')}
-                                  className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
-                                  Decline
-                                </button>
-                              </>
-                            )}
-                            {c.status === 'accepted' && founder && (
-                              <button
-                                onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
-                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                                ✉ Message Founder
-                              </button>
-                            )}
+                            <button onClick={() => handleRespond(c._id, 'accepted')}
+                              className="text-xs px-3.5 py-1.5 rounded-md bg-[#00c853]/15 text-[#00c853] hover:bg-[#00c853]/25 font-semibold transition-colors">
+                              Accept
+                            </button>
+                            <button onClick={() => handleRespond(c._id, 'rejected')}
+                              className="text-xs px-3.5 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 font-semibold transition-colors">
+                              Decline
+                            </button>
                           </div>
                         </motion.div>
                       );
@@ -562,20 +631,19 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* 2. Sent Connections Section */}
+            {/* 3. Sent Pending Requests Section */}
             <div>
-              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Sent Requests</h2>
+              <h2 className="text-xs font-bold text-[#555] uppercase tracking-widest mb-4">Sent Invites (Pending)</h2>
               {loading ? (
                 <Spinner />
-              ) : sentConnections.length === 0 ? (
+              ) : pendingSent.length === 0 ? (
                 <div className="text-center py-12 border border-[#2a2a2a] border-dashed rounded-xl">
-                  <p className="text-[#555] text-xs">No sent requests.</p>
+                  <p className="text-[#555] text-xs">No pending sent invites.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {sentConnections.map((c) => {
+                  {pendingSent.map((c) => {
                     if (user.role === 'investor') {
-                      // Investor sent request to startup
                       const startup = c.startup;
                       const founder = startup?.founder;
                       return (
@@ -596,7 +664,7 @@ export default function Dashboard() {
                                 </div>
                               </div>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-semibold pill-amber">
                               {c.status}
                             </span>
                           </div>
@@ -622,18 +690,10 @@ export default function Dashboard() {
                             <Link to={`/startups/${startup?._id}`} className="text-xs px-3 py-1.5 rounded-md border border-[#2a2a2a] text-[#888] hover:text-white transition-colors">
                               Details
                             </Link>
-                            {c.status === 'accepted' && founder && (
-                              <button
-                                onClick={() => navigate(`/messages?with=${founder._id}&name=${encodeURIComponent(founder.name)}`)}
-                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                                ✉ Message Founder
-                              </button>
-                            )}
                           </div>
                         </motion.div>
                       );
                     } else {
-                      // Founder sent request to investor
                       const inv = c.investor;
                       return (
                         <motion.div key={c._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -648,7 +708,7 @@ export default function Dashboard() {
                                 {inv?.location && <p className="text-[10px] text-[#555] mt-0.5">📍 {inv.location}</p>}
                               </div>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${STATUS_PILL[c.status]}`}>
+                            <span className="text-[10px] px-2 py-0.5 rounded font-semibold pill-amber">
                               {c.status}
                             </span>
                           </div>
@@ -673,13 +733,6 @@ export default function Dashboard() {
                               <a href={inv.linkedin} target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:underline pt-2 mr-auto">
                                 LinkedIn ↗
                               </a>
-                            )}
-                            {c.status === 'accepted' && (
-                              <button
-                                onClick={() => navigate(`/messages?with=${inv._id}&name=${encodeURIComponent(inv.name)}`)}
-                                className="text-xs px-4 py-1.5 rounded-md bg-[#00c853] text-black font-semibold hover:bg-[#00b047] transition-colors">
-                                ✉ Message
-                              </button>
                             )}
                           </div>
                         </motion.div>

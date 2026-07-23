@@ -5,6 +5,21 @@ import toast from 'react-hot-toast';
 import { messageAPI } from '../api/api';
 import { useAuth } from '../context/AuthContext';
 
+const getFormattedDate = (dateStr) => {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today';
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday';
+  } else {
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+};
+
 export default function Messages() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -174,24 +189,38 @@ export default function Messages() {
               {conversation.length === 0 && (
                 <p className="text-center text-[#444] text-xs py-8">No messages yet. Say hello! 👋</p>
               )}
-              {conversation.map((msg) => {
+              {conversation.map((msg, index) => {
                 const senderId = msg.sender?._id?.toString() ?? msg.sender?.toString();
                 const isMe = senderId === myId;
+
+                const currentDateStr = new Date(msg.createdAt).toDateString();
+                const prevDateStr = index > 0 ? new Date(conversation[index - 1].createdAt).toDateString() : null;
+                const showSeparator = currentDateStr !== prevDateStr;
+
                 return (
-                  <motion.div key={msg._id}
-                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[60%] px-3.5 py-2.5 rounded-xl text-xs leading-relaxed ${
-                      isMe
-                        ? 'bg-[#00c853] text-black font-medium rounded-br-md'
-                        : 'bg-[#1e1e1e] border border-[#2a2a2a] text-[#ddd] rounded-bl-md'
-                    }`}>
-                      <p>{msg.content}</p>
-                      <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-black/50' : 'text-[#888]'}`}>
-                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </motion.div>
+                  <div key={msg._id} className="space-y-2.5">
+                    {showSeparator && (
+                      <div className="flex justify-center my-4">
+                        <span className="text-[10px] bg-[#1a1a1a] border border-[#2a2a2a] text-[#888] px-2.5 py-0.5 rounded-full font-semibold">
+                          {getFormattedDate(msg.createdAt)}
+                        </span>
+                      </div>
+                    )}
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                      className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[60%] px-3.5 py-2.5 rounded-xl text-xs leading-relaxed ${
+                        isMe
+                          ? 'bg-[#00c853] text-black font-medium rounded-br-md'
+                          : 'bg-[#1e1e1e] border border-[#2a2a2a] text-[#ddd] rounded-bl-md'
+                      }`}>
+                        <p>{msg.content}</p>
+                        <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-black/50' : 'text-[#888]'}`}>
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </motion.div>
+                  </div>
                 );
               })}
               <div ref={endRef} />

@@ -33,6 +33,17 @@ const getStartups = async (req, res) => {
   try {
     const { search, category, stage, page = 1, limit = 12 } = req.query;
 
+    // Parse token if provided to see if requesting user is an investor
+    let requestingUser = null;
+    if (req.headers.authorization?.startsWith('Bearer')) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        requestingUser = await User.findById(decoded.id);
+      } catch (err) {}
+    }
+
     const query = { isActive: true };
     if (category) query.category = category;
     if (stage) query.stage = stage;
@@ -47,16 +58,6 @@ const getStartups = async (req, res) => {
         .limit(Number(limit)),
       Startup.countDocuments(query),
     ]);
-
-    let requestingUser = null;
-    if (req.headers.authorization?.startsWith('Bearer')) {
-      try {
-        const token = req.headers.authorization.split(' ')[1];
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        requestingUser = await User.findById(decoded.id);
-      } catch (err) {}
-    }
 
     const startupsWithScore = startups.map((s) => {
       const sObj = s.toObject();
